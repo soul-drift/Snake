@@ -1,0 +1,222 @@
+#include<iostream>
+#include<list>
+#include<Windows.h>
+#include<graphics.h>
+#include<time.h>
+#include <stdio.h>
+using namespace std;
+
+int length = 0, x, ms = 150, isgamefalse = 0, on = 1, lev = 1;
+
+//设置蛇移动的方向
+enum direction
+{
+	up,
+	down,
+	left,
+	right,
+};
+direction _dir;
+
+class Apple
+{
+public:
+	Apple()
+	{
+		newapple();
+	}
+	void draw()
+	{
+		solidcircle(_x * 16 + 168, _y * 16 + 8, 5);
+	}
+	//随机生成新苹果
+	void newapple()
+	{
+		srand(time(NULL));
+		_x = rand() % 20;
+		_y = rand() % 20;
+	}
+    int _x;
+	int _y;
+};
+
+class Snake
+{
+public:
+	//初始化蛇
+	Snake()
+	{
+		POINT head = { 13,13 };
+		POINT p1 = { 12,13 };
+		_bodylist.push_back(head);
+		_bodylist.push_back(p1);
+		_dir = direction::right;
+	}
+	//用迭代器遍历蛇，并绘制
+	void draw()
+	{
+		for (list<POINT>::iterator it = _bodylist.begin(); it != _bodylist.end(); it++)
+		{
+			POINT pos = *it;
+			solidrectangle(pos.x * 16 + 160, pos.y * 16, (pos.x + 1) * 16 + 160, (pos.y + 1) * 16);
+		}
+	}
+	//控制蛇的移动方向，同时避免蛇出现不规则移动，例如反向移动
+	void changedirection(direction dir)
+	{
+		if (_dir == direction::up && dir == direction::down || _dir == direction::down && dir == direction::up || _dir == direction::right && dir == direction::left || _dir == direction::left && dir == direction::right)
+			return;
+		_dir = dir;
+	}
+	//在蛇的移动过程中，让蛇身跟上蛇头
+	void update()
+	{
+		int xoffset[4] = { 0,0,-1,1 };//对应蛇移动时x坐标的变化
+		int yoffset[4] = { -1,1,0,0 };//对应蛇移动时y坐标的变化
+		list<POINT>::iterator it = _bodylist.begin();
+		int prevx = it->x;
+		int prevy = it->y;
+		it->x += xoffset[_dir];
+		it->y += yoffset[_dir];
+		it++;
+		for (; it != _bodylist.end(); it++)
+		{
+			int curx = it->x;
+			int cury = it->y;
+			it->x = prevx;
+			it->y = prevy;
+			prevx = curx;
+			prevy = cury;
+		}
+	}
+	//判断蛇头是否与苹果重合，以及蛇头是否撞墙或碰到蛇身
+	void eatapple(Apple& apple)
+	{
+		POINT headpos = *_bodylist.begin();
+		if (headpos.x < 0 || headpos.x > 29 || headpos.y < 0 || headpos.y > 29)
+		{
+			isgamefalse = 1;
+		}
+		for (list<POINT>::iterator it2 = ++(_bodylist.begin()); it2 != _bodylist.end(); it2++)
+		{
+			POINT pos2 = *it2;
+			if (headpos.x == pos2.x && headpos.y == pos2.y)
+			{
+				isgamefalse = 1;
+				return;
+			}
+		}
+		if (headpos.x != apple._x || headpos.y != apple._y)
+		{
+			return;
+		}
+		apple.newapple();
+		POINT end = _bodylist.back();
+		_bodylist.push_back(end);
+		//动态调整得分，并随着得分的提高逐步提高难度（蛇的移动速度）
+		length = _bodylist.size() - 2;
+		x = length / 5;
+		ms = (10 - x) * 15;
+		lev = 1 + x;
+	}
+private:
+	list<POINT> _bodylist;
+};
+
+class UI
+{
+public:
+	void draw()
+	{
+		fillrectangle(0, 0, 160, 480);
+		TCHAR score[10];
+		swprintf_s(score, _T("分数:  %d"), length);
+		outtextxy(30, 50, score);
+		TCHAR level[10];
+		swprintf_s(level, _T("难度:  %d"), lev);
+		outtextxy(30, 240, level);
+	}
+
+};
+
+Snake snake;
+Apple apple;
+UI ui;
+
+void setup()
+{
+	initgraph(640, 480);
+	setbkcolor(BLACK);
+	setbkmode(TRANSPARENT);
+	settextcolor(RGB(0,0,0));
+	settextstyle(0, 0, _T("宋体"));
+	setfillcolor(RGB(129,216,209));
+	cleardevice();
+	BeginBatchDraw();
+}
+
+bool iskeydown(int key)
+{
+	return(GetAsyncKeyState(key) & 0x8000 ? 1 : 0);
+}
+
+void draw()
+{
+	cleardevice();
+	snake.draw();
+	apple.draw();
+	ui.draw();
+	if (isgamefalse)
+	{
+		outtextxy(300, 200, _T("ＧＡＭＥ　ＯＶＥＲ"));
+	}
+	FlushBatchDraw();//执行未完成的绘制任务，避免闪烁
+}
+
+//读取键盘输入并作出反应
+void keyboardcontrol()
+{
+	if (iskeydown(VK_ESCAPE))
+	{
+		on = 0;
+		return;
+	}
+	if (iskeydown(VK_UP))
+	{
+		snake.changedirection(direction::up);
+	}
+	if (iskeydown(VK_DOWN))
+	{
+		snake.changedirection(direction::down);
+	}
+	if (iskeydown(VK_LEFT))
+	{
+		snake.changedirection(direction::left);
+	}
+	if (iskeydown(VK_RIGHT))
+	{
+		snake.changedirection(direction::right);
+	}
+}
+
+void handlelogic()
+{
+	if (isgamefalse)return;//当游戏结束时停止更新
+	snake.update();
+	snake.eatapple(apple);
+}
+
+int main()
+{
+	setup();//初始化游戏
+	setbkcolor(RGB(126, 39, 46));//设置右边背景颜色
+	while (on)
+	{
+		keyboardcontrol();
+		handlelogic();
+		draw();
+		Sleep(ms);//调整运行延时
+	}
+	closegraph();
+	return 0;
+}
